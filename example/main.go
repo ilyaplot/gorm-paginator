@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/biezhi/gorm-paginator/pagination"
 	"github.com/gin-gonic/gin"
+	"github.com/ilyaplot/gorm-paginator/pagination"
 	"github.com/jinzhu/gorm"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -40,13 +40,17 @@ func main() {
 
 	var users []User
 
-	pagination.Paging(&pagination.Param{
+	_, err = pagination.Paging(&pagination.Param{
 		DB:      db.Where("id > ?", 0),
 		Page:    1,
 		Limit:   3,
 		OrderBy: []string{"id desc"},
 		ShowSQL: true,
 	}, &users)
+
+	if err != nil {
+		panic(err)
+	}
 
 	fmt.Println("users:", users)
 
@@ -56,13 +60,18 @@ func main() {
 		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "3"))
 		var users []User
 
-		paginator := pagination.Paging(&pagination.Param{
+		paginator, err := pagination.Paging(&pagination.Param{
 			DB:      db,
 			Page:    page,
 			Limit:   limit,
 			OrderBy: []string{"id desc"},
 			ShowSQL: true,
 		}, &users)
+
+		if err != nil {
+			panic(err)
+		}
+
 		c.JSON(200, paginator)
 	})
 

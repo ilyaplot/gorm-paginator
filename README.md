@@ -3,7 +3,7 @@
 ## Usage
 
 ```bash
-go get github.com/biezhi/gorm-paginator/pagination
+go get github.com/ilyaplot/gorm-paginator/pagination
 ```
 
 ```go
@@ -15,12 +15,16 @@ type User struct {
 var users []User
 db = db.Where("id > ?", 0)
 
-pagination.Pagging(&pagination.Param{
+_, err := pagination.Pagging(&pagination.Param{
     DB:      db,
     Page:    1,
     Limit:   3,
     OrderBy: []string{"id desc"},
 }, &users)
+
+if err != nil {
+  panic(err)
+}
 ```
 
 ## With Gin
@@ -32,13 +36,18 @@ r.GET("/", func(c *gin.Context) {
     limit, _ := strconv.Atoi(c.DefaultQuery("limit", "3"))
     var users []User
 
-    paginator := pagination.Pagging(&pagination.Param{
+    paginator, err := pagination.Pagging(&pagination.Param{
         DB:      db,
         Page:    page,
         Limit:   limit,
         OrderBy: []string{"id desc"},
         ShowSQL: true,
     }, &users)
+    
+    if err != nil {
+      panic(err)
+    }
+
     c.JSON(200, paginator)
 })
 ```

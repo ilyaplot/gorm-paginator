@@ -1,90 +1,102 @@
 package pagination
 
 import (
-	"math"
+  "math"
 
-	"github.com/jinzhu/gorm"
+  "github.com/jinzhu/gorm"
 )
 
 // Param 分页参数
 type Param struct {
-	DB      *gorm.DB
-	Page    int
-	Limit   int
-	OrderBy []string
-	ShowSQL bool
+  DB      *gorm.DB
+  Page    int
+  Limit   int
+  OrderBy []string
+  ShowSQL bool
 }
 
 // Paginator 分页返回
 type Paginator struct {
-	TotalRecord int         `json:"total_record"`
-	TotalPage   int         `json:"total_page"`
-	Records     interface{} `json:"records"`
-	Offset      int         `json:"offset"`
-	Limit       int         `json:"limit"`
-	Page        int         `json:"page"`
-	PrevPage    int         `json:"prev_page"`
-	NextPage    int         `json:"next_page"`
+  TotalRecord int         `json:"total_record"`
+  TotalPage   int         `json:"total_page"`
+  Records     interface{} `json:"records"`
+  Offset      int         `json:"offset"`
+  Limit       int         `json:"limit"`
+  Page        int         `json:"page"`
+  PrevPage    int         `json:"prev_page"`
+  NextPage    int         `json:"next_page"`
 }
 
 // Paging 分页
-func Paging(p *Param, result interface{}) *Paginator {
-	db := p.DB
+func Paging(p *Param, result interface{}) (paginator *Paginator, err error) {
 
-	if p.ShowSQL {
-		db = db.Debug()
-	}
-	if p.Page < 1 {
-		p.Page = 1
-	}
-	if p.Limit == 0 {
-		p.Limit = 10
-	}
-	if len(p.OrderBy) > 0 {
-		for _, o := range p.OrderBy {
-			db = db.Order(o)
-		}
-	}
+  paginator = &Paginator{}
+  db := p.DB
 
-	done := make(chan bool, 1)
-	var paginator Paginator
-	var count int
-	var offset int
+  if p.ShowSQL {
+    db = db.Debug()
+  }
+  if p.Page < 1 {
+    p.Page = 1
+  }
+  if p.Limit == 0 {
+    p.Limit = 10
+  }
+  if len(p.OrderBy) > 0 {
+    for _, o := range p.OrderBy {
+      db = db.Order(o)
+    }
+  }
 
-	go countRecords(db, result, done, &count)
+  done := make(chan bool, 1)
+  var count int
+  var offset int
 
-	if p.Page == 1 {
-		offset = 0
-	} else {
-		offset = (p.Page - 1) * p.Limit
-	}
+  go countRecords(db, result, done, &count, &err)
 
-	db.Limit(p.Limit).Offset(offset).Find(result)
-	<-done
+  if p.Page == 1 {
+    offset = 0
+  } else {
+    offset = (p.Page - 1) * p.Limit
+  }
 
-	paginator.TotalRecord = count
-	paginator.Records = result
-	paginator.Page = p.Page
+  if err != nil {
+    <-done
+    return
+  }
 
-	paginator.Offset = offset
-	paginator.Limit = p.Limit
-	paginator.TotalPage = int(math.Ceil(float64(count) / float64(p.Limit)))
+  dbResult := db.Limit(p.Limit).Offset(offset).Find(result)
+  if dbResult.Error != nil {
+    err = dbResult.Error
+    <-done
+    return
+  }
+  <-done
 
-	if p.Page > 1 {
-		paginator.PrevPage = p.Page - 1
-	} else {
-		paginator.PrevPage = p.Page
-	}
+  paginator.TotalRecord = count
+  paginator.Records = result
+  paginator.Page = p.Page
 
-	if p.Page == paginator.TotalPage {
-		paginator.NextPage = p.Page
-	} else {
-		paginator.NextPage = p.Page + 1
-	}
-	return &paginator
+  paginator.Offset = offset
+  paginator.Limit = p.Limit
+  paginator.TotalPage = int(math.Ceil(float64(count) / float64(p.Limit)))
+
+  if p.Page > 1 {
+    paginator.PrevPage = p.Page - 1
+  } else {
+    paginator.PrevPage = p.Page
+  }
+
+  if p.Page == paginator.TotalPage {
+    paginator.NextPage = p.Page
+  } else {
+    paginator.NextPage = p.Page + 1
+  }
+  return paginator, nil
 }
 
-func countRecords(db *gorm.DB, anyType interface{}, done chan bool, count *int) {
-	db.Model(anyType).Count(count)
-	done <- true
+func countRecords(db *gorm.DB, anyType interface{}, done chan bool, count *int, err *error) {
+  result := db.Model(anyType).Count(count)
+  err = &result.Error
+  done <- true
 }
